@@ -1,0 +1,24 @@
+# Secrets
+.env
+**/.env
+!**/.env.example
+
+# Virtualenvs
+.venv/
+env/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Django runtime
+logs/
+**/logs/
+staticfiles/
+*.sqlite3
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
