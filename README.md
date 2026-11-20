@@ -81,6 +81,18 @@ REDIS_SSL=False
 ```
 
 ### 6. Database Setup
+
+#### Option A: Docker Compose (recommended)
+`docker-compose.yml` in the repo root starts PostgreSQL 15 and Redis 7 with credentials that match `.env.example`:
+```bash
+docker compose up -d     # start Postgres + Redis
+docker compose ps        # both should show "healthy"
+docker compose down      # stop (data persists in the pgdata volume)
+docker compose down -v   # stop and delete the database volume
+```
+Then run migrations (below).
+
+#### Option B: Local PostgreSQL install
 - Ensure PostgreSQL is running.
 - **If you have not set up the database and user yet, follow these steps:**
 
