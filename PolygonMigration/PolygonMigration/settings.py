@@ -127,6 +127,17 @@ POLYGON_API_SECRET = os.getenv("POLYGON_API_SECRET")
 if not POLYGON_API_KEY or not POLYGON_API_SECRET:
     raise Exception("POLYGON_API_KEY and POLYGON_API_SECRET must be set in the .env file")
 
+# Test-case storage backend: "s3" or "azure" (see problems/storage/)
+STORAGE_PROVIDER = os.getenv("STORAGE_PROVIDER", "azure").strip().lower()
+
+# AWS S3 (STORAGE_PROVIDER=s3). If the key pair is unset, boto3's default
+# credential chain is used (IAM role, ~/.aws/credentials, ...).
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+AWS_REGION = os.getenv("AWS_REGION")
+AWS_S3_BUCKET_NAME = os.getenv("AWS_S3_BUCKET_NAME")
+
+# Azure Blob Storage (STORAGE_PROVIDER=azure)
 AZURE_STORAGE_ACCOUNT_URL = os.getenv("AZURE_STORAGE_ACCOUNT_URL")
 AZURE_TENANT_ID = os.getenv("AZURE_TENANT_ID")
 AZURE_CLIENT_ID = os.getenv("AZURE_CLIENT_ID")
