@@ -184,47 +184,6 @@ def index(request):
             
             try:
                 with transaction.atomic():
-                    # Handle cloud storage upload (provider chosen by settings.STORAGE_PROVIDER)
-                    storage_uploaded = False
-                    storage_problem_id = None
-                    if migrate_to_storage:
-                        logger.info('Storage upload triggered for polygon_id=%s (provider=%s)', polygon_id, settings.STORAGE_PROVIDER)
-                        problem_obj = Problem.objects.filter(polygon_id=polygon_id).first()
-                        if not problem_obj:
-                            logger.warning('Problem with Polygon ID %s not in DB', polygon_id)
-                            context['error'] = f"Problem with Polygon ID {polygon_id} has not been migrated to the database yet. Please migrate the problem to the database first before uploading test cases to storage."
-                            return render(request, 'problems/index.html', context)
-
-                        # Problem exists in database; its DB id is used in the storage key prefix
-                        problem_id = problem_obj.id
-                        logger.info('Problem found in DB, uploading to storage with problem_id=%s', problem_id)
-
-                        # Remove Redis cache for this problem id before uploading
-                        api.delete_problem_test_case_cache(problem_id)
-
-                        # Check for custom checker before migration
-                        custom_checker_info = api.get_custom_checker_info(polygon_id)
-                        if custom_checker_info:
-                            logger.info('Custom checker detected before storage upload: %s', custom_checker_info)
-                            context['info'] = f"Custom checker '{custom_checker_info['name']}' detected. Will be compiled and uploaded to storage."
-
-                        logger.info('Calling migrate_to_storage')
-                        try:
-                            uploaded_count = api.migrate_to_storage(polygon_id, problem_id)
-                            storage_uploaded = True
-                            storage_problem_id = problem_id
-                        except Exception as e:
-                            logger.error('Storage upload failed: %s', e, exc_info=True)
-                            # Remove any files uploaded before the failure
-                            api.delete_storage_files(problem_id)
-                            context['error'] = f"Storage upload failed: {str(e)}"
-                            raise
-                        logger.info('Storage upload completed successfully')
-
-                        success_message = f"{uploaded_count} test case(s) uploaded to {settings.STORAGE_PROVIDER.upper()} storage under test_cases/{problem_id}/ successfully."
-                        if custom_checker_info:
-                            success_message += f" Custom checker '{custom_checker_info['name']}' was also compiled and uploaded."
-                        context['success'] = success_message
                     
                     # Always fetch problem data for display
                     info = api.get_problem_info(polygon_id)
@@ -323,6 +282,46 @@ def index(request):
                         'notes': notes,
                     }
                     
+                    # Handle cloud storage upload (provider chosen by settings.STORAGE_PROVIDER).
+                    # This runs after all Polygon calls above, so a Polygon failure can no
+                    # longer happen after the upload and wipe the files it just wrote.
+                    if migrate_to_storage:
+                        logger.info('Storage upload triggered for polygon_id=%s (provider=%s)', polygon_id, settings.STORAGE_PROVIDER)
+                        problem_obj = Problem.objects.filter(polygon_id=polygon_id).first()
+                        if not problem_obj:
+                            logger.warning('Problem with Polygon ID %s not in DB', polygon_id)
+                            context['error'] = f"Problem with Polygon ID {polygon_id} has not been migrated to the database yet. Please migrate the problem to the database first before uploading test cases to storage."
+                            return render(request, 'problems/index.html', context)
+
+                        # Problem exists in database; its DB id is used in the storage key prefix
+                        problem_id = problem_obj.id
+                        logger.info('Problem found in DB, uploading to storage with problem_id=%s', problem_id)
+
+                        # Remove Redis cache for this problem id before uploading
+                        api.delete_problem_test_case_cache(problem_id)
+
+                        # Check for custom checker before migration
+                        custom_checker_info = api.get_custom_checker_info(polygon_id)
+                        if custom_checker_info:
+                            logger.info('Custom checker detected before storage upload: %s', custom_checker_info)
+                            context['info'] = f"Custom checker '{custom_checker_info['name']}' detected. Will be compiled and uploaded to storage."
+
+                        logger.info('Calling migrate_to_storage')
+                        try:
+                            uploaded_count = api.migrate_to_storage(polygon_id, problem_id)
+                        except Exception as e:
+                            logger.error('Storage upload failed: %s', e, exc_info=True)
+                            # Remove any files uploaded before the failure
+                            api.delete_storage_files(problem_id)
+                            context['error'] = f"Storage upload failed: {str(e)}"
+                            raise
+                        logger.info('Storage upload completed successfully')
+
+                        success_message = f"{uploaded_count} test case(s) uploaded to {settings.STORAGE_PROVIDER.upper()} storage under test_cases/{problem_id}/ successfully."
+                        if custom_checker_info:
+                            success_message += f" Custom checker '{custom_checker_info['name']}' was also compiled and uploaded."
+                        context['success'] = success_message
+
                     # Handle database migration
                     if migrate_to_db:
                         # Validate that difficulty is provided
@@ -547,10 +546,9 @@ def index(request):
 
             except Exception as e:
                 logger.error('Exception in index view: %s', e, exc_info=True)
+                # Show only one result: drop any success message set before the failure
+                context.pop('success', None)
                 context['error'] = f"Migration failed and all changes have been rolled back. Reason: {str(e)}"
-                # Compensate for storage: delete uploaded files if the upload succeeded but a later step failed
-                if storage_uploaded and storage_problem_id:
-                    api.delete_storage_files(storage_problem_id)
                 # Compensate for Redis: clear any cached test cases if needed
                 api.clear_test_cases_from_redis(polygon_id)
 
